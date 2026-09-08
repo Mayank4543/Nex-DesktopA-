@@ -1,0 +1,200 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ─── Global Styles ──────────────────────────────────────────── */
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Scrollbar ──────────────────────────────────────────────── */
+
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* ─── Drag Region ────────────────────────────────────────────── */
+
+.drag-region {
+  -webkit-app-region: drag;
+}
+
+.no-drag {
+  -webkit-app-region: no-drag;
+}
+
+/* ─── Selection ──────────────────────────────────────────────── */
+
+::selection {
+  background: rgba(59, 130, 246, 0.3);
+  color: #e4e7eb;
+}
+
+/* ─── Animations ─────────────────────────────────────────────── */
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.animate-shimmer {
+  background: linear-gradient(90deg, transparent 25%, rgba(255, 255, 255, 0.05) 50%, transparent 75%);
+  background-size: 200% 100%;
+  animation: shimmer 2s infinite;
+}
+
+@keyframes typing-dot {
+  0%, 60%, 100% { opacity: 0.2; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-3px); }
+}
+
+.typing-dot:nth-child(1) { animation: typing-dot 1.4s infinite 0ms; }
+.typing-dot:nth-child(2) { animation: typing-dot 1.4s infinite 200ms; }
+.typing-dot:nth-child(3) { animation: typing-dot 1.4s infinite 400ms; }
+
+/* ─── Glass Effect ───────────────────────────────────────────── */
+
+.glass {
+  background: rgba(26, 29, 33, 0.85);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+.glass-border {
+  border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* ─── Markdown Content ───────────────────────────────────────── */
+
+.markdown-content h1 {
+  @apply text-lg font-semibold text-nexa-text mb-3 mt-4;
+}
+
+.markdown-content h2 {
+  @apply text-base font-semibold text-nexa-text mb-2 mt-3;
+}
+
+.markdown-content h3 {
+  @apply text-sm font-semibold text-nexa-text mb-2 mt-3;
+}
+
+.markdown-content p {
+  @apply text-sm text-nexa-text/90 leading-relaxed mb-2;
+}
+
+.markdown-content ul, .markdown-content ol {
+  @apply text-sm text-nexa-text/90 pl-4 mb-2 space-y-1;
+}
+
+.markdown-content li {
+  @apply leading-relaxed;
+}
+
+.markdown-content code:not(pre code) {
+  @apply text-xs bg-nexa-card px-1.5 py-0.5 rounded text-blue-400 font-mono;
+}
+
+.markdown-content pre {
+  @apply bg-nexa-bg rounded-xl p-3 mb-3 overflow-x-auto border border-nexa-border;
+}
+
+.markdown-content pre code {
+  @apply text-xs font-mono text-nexa-text/90 bg-transparent p-0;
+}
+
+.markdown-content blockquote {
+  @apply border-l-2 border-nexa-accent pl-3 italic text-nexa-text-muted text-sm mb-2;
+}
+
+.markdown-content table {
+  @apply w-full text-sm mb-3 border-collapse;
+}
+
+.markdown-content th {
+  @apply text-left p-2 bg-nexa-card text-nexa-text font-medium border-b border-nexa-border;
+}
+
+.markdown-content td {
+  @apply p-2 text-nexa-text/90 border-b border-nexa-border/50;
+}
+
+.markdown-content a {
+  @apply text-nexa-accent hover:text-nexa-accent-hover underline;
+}
+
+.markdown-content strong {
+  @apply font-semibold text-nexa-text;
+}
+
+.markdown-content hr {
+  @apply border-nexa-border my-3;
+}
+
+/* ─── Tooltip ────────────────────────────────────────────────── */
+
+.tooltip-container {
+  position: relative;
+}
+
+.tooltip-container .tooltip {
+  visibility: hidden;
+  opacity: 0;
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 10px;
+  background: #1e2227;
+  color: #e4e7eb;
+  font-size: 11px;
+  border-radius: 6px;
+  white-space: nowrap;
+  transition: all 150ms ease;
+  pointer-events: none;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  z-index: 100;
+}
+
+.tooltip-container:hover .tooltip {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* ─── Screenshot Overlay ─────────────────────────────────────── */
+
+.screenshot-overlay {
+  cursor: crosshair;
+}
+
+.selection-box {
+  border: 2px solid #3b82f6;
+  background: rgba(59, 130, 246, 0.08);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+}
