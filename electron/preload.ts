@@ -2,7 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
   // AI
-  askAI: (request: { prompt: string; context?: string; action?: string }) =>
+  askAI: (request: { prompt: string; context?: string; action?: string; imageDataUrl?: string }) =>
     ipcRenderer.invoke('ask-ai', request),
 
   // Screenshot
@@ -29,7 +29,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   onShortcut: (callback: (action: string) => void) => {
     ipcRenderer.on('shortcut-action', (_event, action: string) => callback(action));
   },
+  // Screenshot captured listener (main process sends screenshot data directly)
+  onScreenshotCaptured: (callback: (data: unknown) => void) => {
+    ipcRenderer.on('screenshot-captured', (_event, data: unknown) => callback(data));
+  },
   removeShortcutListeners: () => {
     ipcRenderer.removeAllListeners('shortcut-action');
+    ipcRenderer.removeAllListeners('screenshot-captured');
   },
 });

@@ -12,13 +12,15 @@ export const AskInput: React.FC = () => {
   const activeAction = useAssistantStore((s) => s.activeAction);
   const currentContext = useAssistantStore((s) => s.currentContext);
   const ocrText = useAssistantStore((s) => s.ocrText);
+  const screenshotDataUrl = useAssistantStore((s) => s.screenshotDataUrl);
+  const clearScreenshot = useAssistantStore((s) => s.clearScreenshot);
   const setShowScreenshotSelector = useAssistantStore((s) => s.setShowScreenshotSelector);
   const addToast = useAssistantStore((s) => s.addToast);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const handleSubmit = useCallback(async () => {
     const prompt = input.trim();
-    if (!prompt && !ocrText) {
+    if (!prompt && !ocrText && !screenshotDataUrl) {
       addToast({ message: 'Please enter a question or capture screen content.', type: 'warning' });
       return;
     }
@@ -36,7 +38,14 @@ export const AskInput: React.FC = () => {
     try {
       const context = ocrText || currentContext || undefined;
       const finalPrompt = prompt || 'Analyze and explain the captured content.';
-      const response = await openAIProvider.ask(finalPrompt, context, activeAction || undefined);
+
+      // Pass image data if a screenshot is attached
+      const response = await openAIProvider.ask(
+        finalPrompt,
+        context,
+        activeAction || undefined,
+        screenshotDataUrl || undefined,
+      );
 
       if (response.error) {
         addToast({ message: response.error, type: 'error' });
@@ -50,7 +59,7 @@ export const AskInput: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [input, ocrText, currentContext, activeAction, setIsLoading, setAnswer, setShowAnswerPanel, addToast]);
+  }, [input, ocrText, screenshotDataUrl, currentContext, activeAction, setIsLoading, setAnswer, setShowAnswerPanel, addToast]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -63,10 +72,51 @@ export const AskInput: React.FC = () => {
     setShowScreenshotSelector(true);
   };
 
+  const hasScreenshot = !!screenshotDataUrl;
+
   return (
     <div className="px-4 pb-3">
-      {/* Context indicator */}
-      {ocrText && (
+      {/* Screenshot preview */}
+      {hasScreenshot && (
+        <div className="mb-2 relative group">
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-nexa-accent/8 border border-nexa-accent/20">
+            <div className="flex-shrink-0 w-12 h-12 rounded-lg overflow-hidden border border-nexa-border bg-nexa-card">
+              <img
+                src={screenshotDataUrl}
+                alt="Screenshot"
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-nexa-accent flex-shrink-0">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
+                  <circle cx="8.5" cy="8.5" r="1.5" />
+                  <polyline points="21 15 16 10 5 21" />
+                </svg>
+                <span className="text-[10px] text-nexa-accent font-medium">Screenshot attached</span>
+              </div>
+              <span className="text-[9px] text-nexa-text-dim block mt-0.5">
+                Type your question about this screenshot and press Enter
+              </span>
+            </div>
+            {/* Remove screenshot button */}
+            <button
+              onClick={clearScreenshot}
+              className="flex-shrink-0 p-1 rounded-lg text-nexa-text-dim hover:text-nexa-text hover:bg-nexa-card/80 transition-all duration-200"
+              title="Remove screenshot"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Context indicator (OCR text, shown only when no screenshot preview) */}
+      {!hasScreenshot && ocrText && (
         <div className="mb-2 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-nexa-accent/8 border border-nexa-accent/20">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-nexa-accent flex-shrink-0">
             <rect x="3" y="3" width="18" height="18" rx="2" ry="2" />
@@ -88,7 +138,7 @@ export const AskInput: React.FC = () => {
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask anything on screen or conversation..."
+            placeholder={hasScreenshot ? "Ask about this screenshot..." : "Ask anything on screen or conversation..."}
             rows={1}
             className="no-drag w-full bg-nexa-card/80 text-nexa-text text-xs rounded-xl px-3.5 py-2.5 pr-10
                        border border-nexa-border focus:border-nexa-accent/40 focus:outline-none focus:ring-1 focus:ring-nexa-accent/20
@@ -129,7 +179,7 @@ export const AskInput: React.FC = () => {
         {/* Send */}
         <button
           onClick={handleSubmit}
-          disabled={isLoading || (!input.trim() && !ocrText)}
+          disabled={isLoading || (!input.trim() && !ocrText && !screenshotDataUrl)}
           className="no-drag flex items-center justify-center w-9 h-9 rounded-xl font-medium
                      bg-gradient-to-r from-blue-500 to-blue-600 text-white
                      hover:from-blue-600 hover:to-blue-700 shadow-glow hover:shadow-glow-lg
@@ -155,6 +205,9 @@ export const AskInput: React.FC = () => {
         </span>
         <span className="text-[9px] text-nexa-text-dim">
           <kbd className="px-1 py-0.5 rounded bg-nexa-card border border-nexa-border text-[8px]">Shift+Enter</kbd> new line
+        </span>
+        <span className="text-[9px] text-nexa-text-dim">
+          <kbd className="px-1 py-0.5 rounded bg-nexa-card border border-nexa-border text-[8px]">Ctrl+Shift+H</kbd> screenshot
         </span>
       </div>
     </div>

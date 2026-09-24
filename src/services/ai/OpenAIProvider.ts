@@ -7,7 +7,7 @@ import type { AIResponse, ActionType } from '../../types/assistant';
  * so the API key is never exposed to the renderer.
  */
 export class OpenAIProvider implements AIProvider {
-  async ask(prompt: string, context?: string, action?: ActionType): Promise<AIResponse> {
+  async ask(prompt: string, context?: string, action?: ActionType, imageDataUrl?: string): Promise<AIResponse> {
     if (!window.electronAPI) {
       return { content: '', error: 'Electron API not available.' };
     }
@@ -17,6 +17,7 @@ export class OpenAIProvider implements AIProvider {
         prompt,
         context,
         action,
+        imageDataUrl,
       });
 
       return response;

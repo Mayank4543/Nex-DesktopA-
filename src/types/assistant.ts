@@ -44,6 +44,7 @@ export interface AIRequest {
   prompt: string;
   context?: string;
   action?: ActionType;
+  imageDataUrl?: string;
 }
 
 export interface AIResponse {
@@ -79,6 +80,7 @@ export interface AssistantState {
   input: string;
   currentContext: string;
   screenshot: ScreenshotData | null;
+  screenshotDataUrl: string;
   ocrText: string;
   screenshotPreview: string;
 
@@ -113,7 +115,9 @@ export interface AssistantActions {
   setContext: (context: string) => void;
   setOCRText: (text: string) => void;
   setScreenshot: (screenshot: ScreenshotData | null) => void;
+  setScreenshotDataUrl: (dataUrl: string) => void;
   setScreenshotPreview: (preview: string) => void;
+  clearScreenshot: () => void;
   setAnswer: (answer: string) => void;
   appendAnswer: (chunk: string) => void;
   setIsLoading: (loading: boolean) => void;
@@ -133,7 +137,7 @@ export interface AssistantActions {
 // ─── Electron IPC Bridge ────────────────────────────────────────────────────
 
 export interface ElectronAPI {
-  askAI: (request: AIRequest) => Promise<AIResponse>;
+  askAI: (request: { prompt: string; context?: string; action?: string; imageDataUrl?: string }) => Promise<AIResponse>;
   captureScreen: () => Promise<ScreenshotData | null>;
   runOCR: (imageDataUrl: string) => Promise<OCRResult>;
   speak: (text: string) => Promise<void>;
@@ -144,6 +148,7 @@ export interface ElectronAPI {
   close: () => void;
   setAlwaysOnTop: (value: boolean) => void;
   onShortcut: (callback: (action: string) => void) => void;
+  onScreenshotCaptured: (callback: (data: ScreenshotData | null) => void) => void;
   removeShortcutListeners: () => void;
   getApiKeyExists: () => Promise<boolean>;
 }

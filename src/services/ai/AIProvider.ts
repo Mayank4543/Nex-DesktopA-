@@ -10,8 +10,9 @@ export interface AIProvider {
    * @param prompt - The user's question or instruction
    * @param context - Optional context (e.g., OCR text, code snippet)
    * @param action - Optional action type to customize the AI's behavior
+   * @param imageDataUrl - Optional screenshot image data URL for vision analysis
    */
-  ask(prompt: string, context?: string, action?: ActionType): Promise<AIResponse>;
+  ask(prompt: string, context?: string, action?: ActionType, imageDataUrl?: string): Promise<AIResponse>;
 
 
   /**

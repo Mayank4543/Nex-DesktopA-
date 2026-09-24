@@ -28,7 +28,7 @@ function getSystemPrompt(action?: string): string {
 }
 
 export function registerAIHandlers(): void {
-  ipcMain.handle('ask-ai', async (_event, request: { prompt: string; context?: string; action?: string }) => {
+  ipcMain.handle('ask-ai', async (_event, request: { prompt: string; context?: string; action?: string; imageDataUrl?: string }) => {
     const apiKey = getApiKey();
 
     if (!apiKey) {
@@ -43,7 +43,34 @@ export function registerAIHandlers(): void {
         { role: 'system', content: getSystemPrompt(request.action) },
       ];
 
-      if (request.context) {
+      // Build user message — with or without image
+      if (request.imageDataUrl) {
+        // Vision API: send image + text as multi-part content
+        const userContent: OpenAI.ChatCompletionContentPart[] = [];
+
+        // Add the image
+        userContent.push({
+          type: 'image_url',
+          image_url: {
+            url: request.imageDataUrl,
+            detail: 'high',
+          },
+        });
+
+        // Build text prompt
+        let textPrompt = '';
+        if (request.context) {
+          textPrompt += `Context:\n\`\`\`\n${request.context}\n\`\`\`\n\n`;
+        }
+        textPrompt += request.prompt;
+
+        userContent.push({
+          type: 'text',
+          text: textPrompt,
+        });
+
+        messages.push({ role: 'user', content: userContent });
+      } else if (request.context) {
         messages.push({
           role: 'user',
           content: `Context:\n\`\`\`\n${request.context}\n\`\`\`\n\nQuestion: ${request.prompt}`,
@@ -52,8 +79,13 @@ export function registerAIHandlers(): void {
         messages.push({ role: 'user', content: request.prompt });
       }
 
+      // Use a vision-capable model when image is present
+      const model = request.imageDataUrl
+        ? (settings.model?.includes('gpt-4') ? settings.model : 'gpt-4o-mini')
+        : (settings.model || 'gpt-4o-mini');
+
       const completion = await openai.chat.completions.create({
-        model: settings.model || 'gpt-4o-mini',
+        model,
         messages,
         temperature: settings.temperature ?? 0.7,
         max_tokens: settings.maxTokens ?? 2048,
