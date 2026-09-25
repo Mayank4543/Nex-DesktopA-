@@ -9,6 +9,7 @@ const App: React.FC = () => {
   const setShowScreenshotSelector = useAssistantStore((s) => s.setShowScreenshotSelector);
   const setScreenshotDataUrl = useAssistantStore((s) => s.setScreenshotDataUrl);
   const setScreenshot = useAssistantStore((s) => s.setScreenshot);
+  const setInput = useAssistantStore((s) => s.setInput);
   const addToast = useAssistantStore((s) => s.addToast);
   const updateSettings = useAssistantStore((s) => s.updateSettings);
 
@@ -36,7 +37,12 @@ const App: React.FC = () => {
       if (data) {
         setScreenshot(data);
         setScreenshotDataUrl(data.dataUrl);
-        addToast({ message: 'Screenshot captured! Type your question and send.', type: 'success' });
+        // Auto-fill the prompt with a default editable text
+        const currentInput = useAssistantStore.getState().input;
+        if (!currentInput.trim()) {
+          setInput('Analyze and answer the questions in this screenshot');
+        }
+        addToast({ message: 'Screenshot captured! Edit the prompt and press Enter.', type: 'success' });
       } else {
         addToast({ message: 'Failed to capture screen.', type: 'error' });
       }

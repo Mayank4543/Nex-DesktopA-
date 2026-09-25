@@ -24,6 +24,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   minimize: () => ipcRenderer.send('window-minimize'),
   close: () => ipcRenderer.send('window-close'),
   setAlwaysOnTop: (value: boolean) => ipcRenderer.send('set-always-on-top', value),
+  setStealthMode: (value: boolean) => ipcRenderer.send('set-stealth-mode', value),
 
   // Shortcuts listener
   onShortcut: (callback: (action: string) => void) => {

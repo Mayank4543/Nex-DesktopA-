@@ -15,6 +15,7 @@ export const SettingsPanel: React.FC = () => {
   const [localTTS, setLocalTTS] = useState(settings.ttsEnabled);
   const [localAlwaysOnTop, setLocalAlwaysOnTop] = useState(settings.alwaysOnTop);
   const [localQuality, setLocalQuality] = useState(settings.screenshotQuality);
+  const [localStealthMode, setLocalStealthMode] = useState(settings.stealthMode);
 
   useEffect(() => {
     if (showSettings) {
@@ -24,6 +25,7 @@ export const SettingsPanel: React.FC = () => {
       setLocalTTS(settings.ttsEnabled);
       setLocalAlwaysOnTop(settings.alwaysOnTop);
       setLocalQuality(settings.screenshotQuality);
+      setLocalStealthMode(settings.stealthMode);
       // Check if key exists
       window.electronAPI?.getApiKeyExists().then((exists) => {
         if (exists) setLocalApiKey('••••••••');
@@ -44,6 +46,7 @@ export const SettingsPanel: React.FC = () => {
         ttsEnabled: localTTS,
         alwaysOnTop: localAlwaysOnTop,
         screenshotQuality: localQuality,
+        stealthMode: localStealthMode,
         apiKey: localApiKey !== '••••••••' ? localApiKey : settings.apiKey,
       };
 
@@ -52,6 +55,7 @@ export const SettingsPanel: React.FC = () => {
       // Save to Electron main process
       await window.electronAPI?.saveSettings(newSettings);
       window.electronAPI?.setAlwaysOnTop(localAlwaysOnTop);
+      window.electronAPI?.setStealthMode(localStealthMode);
 
       addToast({ message: 'Settings saved!', type: 'success', duration: 2000 });
       setShowSettings(false);
@@ -159,6 +163,22 @@ export const SettingsPanel: React.FC = () => {
           <div className="flex items-center justify-between">
             <span className="text-[11px] text-nexa-text-muted">Always on Top</span>
             <Toggle checked={localAlwaysOnTop} onChange={setLocalAlwaysOnTop} />
+          </div>
+
+          {/* Stealth Mode */}
+          <div className="pt-1 border-t border-nexa-border/30">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="text-emerald-400 flex-shrink-0">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+                </svg>
+                <span className="text-[11px] text-nexa-text-muted">Stealth Mode</span>
+              </div>
+              <Toggle checked={localStealthMode} onChange={setLocalStealthMode} />
+            </div>
+            <p className="text-[9px] text-nexa-text-dim mt-1 ml-[18px] leading-relaxed">
+              Invisible to screen sharing (Meet, Teams, Discord, LeetCode, Codeforces)
+            </p>
           </div>
         </div>
 

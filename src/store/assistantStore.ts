@@ -5,6 +5,7 @@ import type {
   ActionType,
   AppSettings,
   ScreenshotData,
+  ChatMessage,
   Toast,
   DEFAULT_SETTINGS,
 } from '../types/assistant';
@@ -21,6 +22,7 @@ const initialSettings: AppSettings = {
   alwaysOnTop: true,
   startWithWindows: false,
   screenshotQuality: 'high',
+  stealthMode: true,
 };
 
 const initialState: AssistantState = {
@@ -39,6 +41,7 @@ const initialState: AssistantState = {
   showScreenshotSelector: false,
   showAnswerPanel: false,
   settings: initialSettings,
+  messages: [],
   toasts: [],
 };
 
@@ -105,6 +108,17 @@ export const useAssistantStore = create<AssistantState & AssistantActions>((set,
       toasts: state.toasts.filter((t) => t.id !== id),
     })),
 
+  // ─── Chat History ────────────────────────────────────────────
+
+  addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>) => {
+    const id = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    set((state) => ({
+      messages: [...state.messages, { ...message, id, timestamp: Date.now() }],
+    }));
+  },
+
+  clearMessages: () => set({ messages: [] }),
+
   // ─── Reset ──────────────────────────────────────────────────
 
   reset: () =>
@@ -120,5 +134,6 @@ export const useAssistantStore = create<AssistantState & AssistantActions>((set,
       isStreaming: false,
       activeAction: null,
       showAnswerPanel: false,
+      messages: [],
     }),
 }));

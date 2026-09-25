@@ -11,6 +11,7 @@ export interface AppSettings {
   alwaysOnTop: boolean;
   startWithWindows: boolean;
   screenshotQuality: 'low' | 'medium' | 'high';
+  stealthMode: boolean;
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -24,6 +25,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   alwaysOnTop: true,
   startWithWindows: false,
   screenshotQuality: 'high',
+  stealthMode: true,
 };
 
 // ─── AI ─────────────────────────────────────────────────────────────────────
@@ -73,6 +75,16 @@ export interface OCRResult {
   confidence: number;
 }
 
+// ─── Chat History ───────────────────────────────────────────────────────────
+
+export interface ChatMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  screenshotDataUrl?: string;
+  timestamp: number;
+}
+
 // ─── Store ──────────────────────────────────────────────────────────────────
 
 export interface AssistantState {
@@ -90,6 +102,9 @@ export interface AssistantState {
   isStreaming: boolean;
   isSpeaking: boolean;
   activeAction: ActionType | null;
+
+  // Chat history
+  messages: ChatMessage[];
 
   // UI
   showSettings: boolean;
@@ -128,6 +143,8 @@ export interface AssistantActions {
   setShowScreenshotSelector: (show: boolean) => void;
   setShowAnswerPanel: (show: boolean) => void;
   clearAnswer: () => void;
+  addMessage: (message: Omit<ChatMessage, 'id' | 'timestamp'>) => void;
+  clearMessages: () => void;
   updateSettings: (settings: Partial<AppSettings>) => void;
   addToast: (toast: Omit<Toast, 'id'>) => void;
   removeToast: (id: string) => void;
@@ -147,6 +164,7 @@ export interface ElectronAPI {
   minimize: () => void;
   close: () => void;
   setAlwaysOnTop: (value: boolean) => void;
+  setStealthMode: (value: boolean) => void;
   onShortcut: (callback: (action: string) => void) => void;
   onScreenshotCaptured: (callback: (data: ScreenshotData | null) => void) => void;
   removeShortcutListeners: () => void;

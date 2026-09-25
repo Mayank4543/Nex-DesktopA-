@@ -40,9 +40,19 @@ function createWindow(): void {
     },
   });
 
+  const stealthEnabled = settings.stealthMode ?? true;
+
+  if (stealthEnabled) {
+    mainWindow.setContentProtection(true);
+  }
+
   // Show window when ready to prevent flashing
   mainWindow.once('ready-to-show', () => {
     mainWindow?.show();
+
+    if (stealthEnabled) {
+      mainWindow?.setContentProtection(true);
+    }
   });
 
   // Load the app
@@ -63,6 +73,11 @@ function createWindow(): void {
 
   ipcMain.on('set-always-on-top', (_event, value: boolean) => {
     mainWindow?.setAlwaysOnTop(value);
+  });
+
+  // Stealth mode — toggle content protection (invisible to screen capture)
+  ipcMain.on('set-stealth-mode', (_event, value: boolean) => {
+    mainWindow?.setContentProtection(value);
   });
 
   // TTS handlers (use system speech synthesis via a simple approach)

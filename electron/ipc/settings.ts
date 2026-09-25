@@ -15,6 +15,7 @@ const DEFAULT_SETTINGS = {
   alwaysOnTop: true,
   startWithWindows: false,
   screenshotQuality: 'high' as const,
+  stealthMode: true,
 };
 
 function loadSettings() {

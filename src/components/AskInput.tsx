@@ -1,6 +1,8 @@
-import React, { useRef, useCallback } from 'react';
+import React, { useRef, useCallback, useEffect } from 'react';
 import { useAssistantStore } from '../store/assistantStore';
 import { openAIProvider } from '../services/ai/OpenAIProvider';
+
+const DEFAULT_SCREENSHOT_PROMPT = 'Analyze and answer the questions in this screenshot';
 
 export const AskInput: React.FC = () => {
   const input = useAssistantStore((s) => s.input);
@@ -16,7 +18,25 @@ export const AskInput: React.FC = () => {
   const clearScreenshot = useAssistantStore((s) => s.clearScreenshot);
   const setShowScreenshotSelector = useAssistantStore((s) => s.setShowScreenshotSelector);
   const addToast = useAssistantStore((s) => s.addToast);
+  const addMessage = useAssistantStore((s) => s.addMessage);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  // Auto-fill prompt when a screenshot is captured
+  const prevScreenshotRef = useRef(screenshotDataUrl);
+  useEffect(() => {
+    if (screenshotDataUrl && screenshotDataUrl !== prevScreenshotRef.current) {
+      // A new screenshot just arrived — auto-fill with default prompt if input is empty
+      if (!input.trim()) {
+        setInput(DEFAULT_SCREENSHOT_PROMPT);
+      }
+      // Focus the textarea so user can immediately edit
+      setTimeout(() => {
+        textareaRef.current?.focus();
+        textareaRef.current?.select();
+      }, 100);
+    }
+    prevScreenshotRef.current = screenshotDataUrl;
+  }, [screenshotDataUrl]);
 
   const handleSubmit = useCallback(async () => {
     const prompt = input.trim();
@@ -32,12 +52,21 @@ export const AskInput: React.FC = () => {
     }
 
     setIsLoading(true);
-    setAnswer('');
     setShowAnswerPanel(true);
+
+    // Add user message to chat history
+    const finalPrompt = prompt || 'Analyze and explain the captured content.';
+    addMessage({
+      role: 'user',
+      content: finalPrompt,
+      screenshotDataUrl: screenshotDataUrl || undefined,
+    });
+
+    // Clear input but keep screenshot context until response
+    setInput('');
 
     try {
       const context = ocrText || currentContext || undefined;
-      const finalPrompt = prompt || 'Analyze and explain the captured content.';
 
       // Pass image data if a screenshot is attached
       const response = await openAIProvider.ask(
@@ -49,17 +78,31 @@ export const AskInput: React.FC = () => {
 
       if (response.error) {
         addToast({ message: response.error, type: 'error' });
-        setAnswer('');
-        setShowAnswerPanel(false);
+        // Add error message to chat
+        addMessage({
+          role: 'assistant',
+          content: `⚠️ Error: ${response.error}`,
+        });
       } else {
         setAnswer(response.content);
+        // Add assistant response to chat history
+        addMessage({
+          role: 'assistant',
+          content: response.content,
+        });
       }
     } catch (err) {
       addToast({ message: 'An unexpected error occurred.', type: 'error' });
+      addMessage({
+        role: 'assistant',
+        content: '⚠️ An unexpected error occurred. Please try again.',
+      });
     } finally {
       setIsLoading(false);
+      // Clear screenshot after sending so user can take a new one
+      clearScreenshot();
     }
-  }, [input, ocrText, screenshotDataUrl, currentContext, activeAction, setIsLoading, setAnswer, setShowAnswerPanel, addToast]);
+  }, [input, ocrText, screenshotDataUrl, currentContext, activeAction, setIsLoading, setAnswer, setShowAnswerPanel, addToast, addMessage, clearScreenshot]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -97,12 +140,12 @@ export const AskInput: React.FC = () => {
                 <span className="text-[10px] text-nexa-accent font-medium">Screenshot attached</span>
               </div>
               <span className="text-[9px] text-nexa-text-dim block mt-0.5">
-                Type your question about this screenshot and press Enter
+                Edit the prompt below and press Enter to send
               </span>
             </div>
             {/* Remove screenshot button */}
             <button
-              onClick={clearScreenshot}
+              onClick={() => { clearScreenshot(); setInput(''); }}
               className="flex-shrink-0 p-1 rounded-lg text-nexa-text-dim hover:text-nexa-text hover:bg-nexa-card/80 transition-all duration-200"
               title="Remove screenshot"
             >

@@ -16,6 +16,7 @@ export const ScreenshotSelector: React.FC = () => {
   const setOCRText = useAssistantStore((s) => s.setOCRText);
   const setScreenshot = useAssistantStore((s) => s.setScreenshot);
   const setScreenshotPreview = useAssistantStore((s) => s.setScreenshotPreview);
+  const setInput = useAssistantStore((s) => s.setInput);
   const addToast = useAssistantStore((s) => s.addToast);
   const setIsLoading = useAssistantStore((s) => s.setIsLoading);
 
@@ -155,6 +156,11 @@ export const ScreenshotSelector: React.FC = () => {
   };
 
   const handleDone = () => {
+    // Auto-fill prompt when screenshot flow completes
+    const currentInput = useAssistantStore.getState().input;
+    if (!currentInput.trim()) {
+      setInput('Analyze and answer the questions in this screenshot');
+    }
     setShowScreenshotSelector(false);
   };
 
