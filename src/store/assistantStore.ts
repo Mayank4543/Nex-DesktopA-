@@ -23,6 +23,7 @@ const initialSettings: AppSettings = {
   startWithWindows: false,
   screenshotQuality: 'high',
   stealthMode: true,
+  windowOpacity: 80,
 };
 
 const initialState: AssistantState = {

@@ -16,6 +16,7 @@ const DEFAULT_SETTINGS = {
   startWithWindows: false,
   screenshotQuality: 'high' as const,
   stealthMode: true,
+  windowOpacity: 80,
 };
 
 function loadSettings() {

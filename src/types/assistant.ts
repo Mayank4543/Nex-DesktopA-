@@ -12,6 +12,7 @@ export interface AppSettings {
   startWithWindows: boolean;
   screenshotQuality: 'low' | 'medium' | 'high';
   stealthMode: boolean;
+  windowOpacity: number; // 20 to 100 percentage
 }
 
 export const DEFAULT_SETTINGS: AppSettings = {
@@ -26,6 +27,7 @@ export const DEFAULT_SETTINGS: AppSettings = {
   startWithWindows: false,
   screenshotQuality: 'high',
   stealthMode: true,
+  windowOpacity: 80,
 };
 
 // ─── AI ─────────────────────────────────────────────────────────────────────

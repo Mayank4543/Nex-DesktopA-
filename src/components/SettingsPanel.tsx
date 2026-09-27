@@ -16,6 +16,7 @@ export const SettingsPanel: React.FC = () => {
   const [localAlwaysOnTop, setLocalAlwaysOnTop] = useState(settings.alwaysOnTop);
   const [localQuality, setLocalQuality] = useState(settings.screenshotQuality);
   const [localStealthMode, setLocalStealthMode] = useState(settings.stealthMode);
+  const [localOpacity, setLocalOpacity] = useState(settings.windowOpacity ?? 80);
 
   useEffect(() => {
     if (showSettings) {
@@ -26,6 +27,7 @@ export const SettingsPanel: React.FC = () => {
       setLocalAlwaysOnTop(settings.alwaysOnTop);
       setLocalQuality(settings.screenshotQuality);
       setLocalStealthMode(settings.stealthMode);
+      setLocalOpacity(settings.windowOpacity ?? 80);
       // Check if key exists
       window.electronAPI?.getApiKeyExists().then((exists) => {
         if (exists) setLocalApiKey('••••••••');
@@ -47,6 +49,7 @@ export const SettingsPanel: React.FC = () => {
         alwaysOnTop: localAlwaysOnTop,
         screenshotQuality: localQuality,
         stealthMode: localStealthMode,
+        windowOpacity: localOpacity,
         apiKey: localApiKey !== '••••••••' ? localApiKey : settings.apiKey,
       };
 
@@ -164,6 +167,23 @@ export const SettingsPanel: React.FC = () => {
             <span className="text-[11px] text-nexa-text-muted">Always on Top</span>
             <Toggle checked={localAlwaysOnTop} onChange={setLocalAlwaysOnTop} />
           </div>
+
+          {/* Window Opacity / Transparency */}
+          <SettingField label={`Window Opacity: ${localOpacity}%`}>
+            <input
+              type="range"
+              min="30"
+              max="100"
+              step="5"
+              value={localOpacity}
+              onChange={(e) => {
+                const val = Number(e.target.value);
+                setLocalOpacity(val);
+                updateSettings({ ...settings, windowOpacity: val });
+              }}
+              className="w-full accent-blue-500 cursor-pointer h-1.5 bg-nexa-border rounded-lg appearance-none"
+            />
+          </SettingField>
 
           {/* Stealth Mode */}
           <div className="pt-1 border-t border-nexa-border/30">

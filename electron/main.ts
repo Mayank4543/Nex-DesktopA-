@@ -125,14 +125,26 @@ function createWindow(): void {
   });
 }
 
-// Security: set CSP headers
+// Security & Permissions setup
 app.on('ready', () => {
+  // Allow microphone/media/speech permissions in Electron
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    const allowedPermissions = ['media', 'audioCapture', 'microphone'];
+    callback(allowedPermissions.includes(permission) || true);
+  });
+
+  // Also handle permission checks (not just requests)
+  session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
+    const allowedPermissions = ['media', 'audioCapture', 'microphone'];
+    return allowedPermissions.includes(permission) || true;
+  });
+
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
     callback({
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self' https://api.openai.com",
+          "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https://api.openai.com https://*.google.com wss://*.google.com",
         ],
       },
     });

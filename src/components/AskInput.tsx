@@ -1,4 +1,4 @@
-import React, { useRef, useCallback, useEffect } from 'react';
+import React, { useRef,useState, useCallback, useEffect } from 'react';
 import { useAssistantStore } from '../store/assistantStore';
 import { openAIProvider } from '../services/ai/OpenAIProvider';
 
@@ -20,6 +20,165 @@ export const AskInput: React.FC = () => {
   const addToast = useAssistantStore((s) => s.addToast);
   const addMessage = useAssistantStore((s) => s.addMessage);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+  const [isListening, setIsListening] = useState(false);
+  const [interimTranscript, setInterimTranscript] = useState('');
+  const recognitionRef = useRef<any>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const isListeningRef = useRef(false);
+  const initialInputRef = useRef('');
+
+  // Pure SpeechRecognition flow: Listen → SpeechRecognition → interim transcript → textarea
+  // No audio recording, no Whisper. User presses Enter to submit.
+  const toggleListening = useCallback(async () => {
+    // If currently listening, stop
+    if (isListening) {
+      isListeningRef.current = false;
+      setIsListening(false);
+      setInterimTranscript('');
+
+      // Stop Web Speech Recognition
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.onend = null;
+          recognitionRef.current.stop();
+        } catch {}
+        recognitionRef.current = null;
+      }
+
+      // Release the mic stream
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+      }
+
+      addToast({ message: 'Stopped listening.', type: 'info' });
+      return;
+    }
+
+    // Save initial input before listening so spoken words append cleanly
+    initialInputRef.current = useAssistantStore.getState().input;
+
+    // In Electron, we must acquire the mic stream and keep it alive
+    // for SpeechRecognition to work — it shares the audio device
+    let stream: MediaStream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+    } catch (e: any) {
+      console.warn('Microphone permission check failed:', e);
+      addToast({ message: 'Microphone access denied or no recording device found.', type: 'error' });
+      return;
+    }
+
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      stream.getTracks().forEach((track) => track.stop());
+      mediaStreamRef.current = null;
+      addToast({ message: 'Speech recognition API not available in browser.', type: 'error' });
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      recognition.lang = 'en-US';
+
+      isListeningRef.current = true;
+      setIsListening(true);
+      addToast({ message: 'Listening live... Speak now!', type: 'success' });
+
+      recognition.onresult = (event: any) => {
+        let final = '';
+        let interim = '';
+        for (let i = 0; i < event.results.length; i++) {
+          const transcriptChunk = event.results[i][0].transcript;
+          if (event.results[i].isFinal) {
+            final += transcriptChunk + ' ';
+          } else {
+            interim += transcriptChunk;
+          }
+        }
+
+        // Clean up repetitive silence dots (. . . . .)
+        let cleanSpokenText = (final + interim)
+          .replace(/(\s*\.\s*){2,}/g, ' ')
+          .replace(/^\s*\.\s*/, '')
+          .trim();
+
+        if (cleanSpokenText) {
+          const prefix = initialInputRef.current ? `${initialInputRef.current.trim()} ` : '';
+          setInput(prefix + cleanSpokenText);
+        }
+        setInterimTranscript(interim.replace(/(\s*\.\s*){2,}/g, '').trim());
+      };
+
+      recognition.onerror = (event: any) => {
+        console.warn('Live speech recognition notice:', event.error);
+        if (event.error === 'not-allowed') {
+          setIsListening(false);
+          isListeningRef.current = false;
+          if (mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+            mediaStreamRef.current = null;
+          }
+          addToast({ message: 'Microphone permission denied.', type: 'error' });
+        }
+      };
+
+      recognition.onend = () => {
+        setInterimTranscript('');
+        // Keep listening continuous in real-time until user turns it off
+        if (isListeningRef.current && recognitionRef.current) {
+          try {
+            recognition.start();
+          } catch {
+            // ignore restart errors
+          }
+        } else {
+          setIsListening(false);
+          // Release mic when recognition ends naturally
+          if (mediaStreamRef.current) {
+            mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+            mediaStreamRef.current = null;
+          }
+        }
+      };
+
+      recognition.start();
+      recognitionRef.current = recognition;
+    } catch (err) {
+      console.error('Failed to start live speech recognition:', err);
+      setIsListening(false);
+      isListeningRef.current = false;
+      // Release mic on failure
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+        mediaStreamRef.current = null;
+      }
+      addToast({ message: 'Failed to start live speech recognition.', type: 'error' });
+    }
+  }, [isListening, addToast, setInput]);
+
+  // Cleanup recognition and mic stream on component unmount
+  useEffect(() => {
+    return () => {
+      isListeningRef.current = false;
+      if (recognitionRef.current) {
+        try {
+          recognitionRef.current.onend = null;
+          recognitionRef.current.stop();
+        } catch {}
+      }
+      if (mediaStreamRef.current) {
+        try {
+          mediaStreamRef.current.getTracks().forEach((track) => track.stop());
+        } catch {}
+      }
+    };
+  }, []);
 
   // Auto-fill prompt when a screenshot is captured
   const prevScreenshotRef = useRef(screenshotDataUrl);
@@ -158,6 +317,17 @@ export const AskInput: React.FC = () => {
         </div>
       )}
 
+      {/* Live speech listening indicator */}
+      {isListening && (
+        <div className="mb-2 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/30 animate-pulse">
+          <div className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+          <span className="text-[10px] text-red-400 font-semibold tracking-wide uppercase">Listening Live</span>
+          <span className="text-[10px] text-nexa-text-muted truncate flex-1 italic">
+            {interimTranscript || 'Waiting for speaker in meeting...'}
+          </span>
+        </div>
+      )}
+
       {/* Context indicator (OCR text, shown only when no screenshot preview) */}
       {!hasScreenshot && ocrText && (
         <div className="mb-2 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-nexa-accent/8 border border-nexa-accent/20">
@@ -174,14 +344,20 @@ export const AskInput: React.FC = () => {
       )}
 
       {/* Input area */}
-      <div className="relative flex items-end gap-2">
+      <div className="relative flex items-end gap-1.5">
         <div className="flex-1 relative">
           <textarea
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder={hasScreenshot ? "Ask about this screenshot..." : "Ask anything on screen or conversation..."}
+            placeholder={
+              isListening
+                ? "Live transcribing speaker in meeting..."
+                : hasScreenshot
+                ? "Ask about this screenshot..."
+                : "Ask anything or listen to meeting..."
+            }
             rows={1}
             className="no-drag w-full bg-nexa-card/80 text-nexa-text text-xs rounded-xl px-3.5 py-2.5 pr-10
                        border border-nexa-border focus:border-nexa-accent/40 focus:outline-none focus:ring-1 focus:ring-nexa-accent/20
@@ -202,11 +378,35 @@ export const AskInput: React.FC = () => {
           )}
         </div>
 
+        {/* Live Meeting Mic button */}
+        <button
+          onClick={toggleListening}
+          disabled={isLoading}
+          className={`tooltip-container no-drag flex items-center gap-1 px-2.5 py-2 rounded-xl text-[11px] font-medium transition-all duration-200 flex-shrink-0 border ${
+            isListening
+              ? 'bg-red-500/20 text-red-400 border-red-500/40 shadow-glow'
+              : 'bg-nexa-card/80 text-nexa-text-muted border-nexa-border hover:text-nexa-text hover:bg-nexa-card hover:border-nexa-border-light'
+          }`}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={isListening ? 'animate-bounce' : ''}>
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
+            <line x1="12" y1="19" x2="12" y2="23" />
+            <line x1="8" y1="23" x2="16" y2="23" />
+          </svg>
+          <span className="hidden sm:inline">
+            {isListening ? 'Listening' : 'Listen'}
+          </span>
+          <span className="tooltip">
+            {isListening ? 'Click to Stop Listening' : 'Listen & Transcribe Live'}
+          </span>
+        </button>
+
         {/* Capture screen */}
         <button
           onClick={handleCaptureScreen}
           disabled={isLoading}
-          className="tooltip-container no-drag flex items-center gap-1.5 px-3 py-2 rounded-xl text-[11px] font-medium
+          className="tooltip-container no-drag flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-[11px] font-medium
                      bg-nexa-card/80 text-nexa-text-muted border border-nexa-border
                      hover:text-nexa-text hover:bg-nexa-card hover:border-nexa-border-light
                      transition-all duration-200 disabled:opacity-50 flex-shrink-0"
