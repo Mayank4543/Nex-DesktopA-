@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback, useEffect, useLayoutEffect } from 'react';
+import React, { useRef,useCallback, useEffect, useLayoutEffect } from 'react';
 import { useAssistantStore } from '../store/assistantStore';
 import { openAIProvider } from '../services/ai/OpenAIProvider';
 import { useSpeakerTranscription } from '../hooks/useSpeakerTranscription';
