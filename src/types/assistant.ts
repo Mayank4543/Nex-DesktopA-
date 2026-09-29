@@ -171,6 +171,11 @@ export interface ElectronAPI {
   onScreenshotCaptured: (callback: (data: ScreenshotData | null) => void) => void;
   removeShortcutListeners: () => void;
   getApiKeyExists: () => Promise<boolean>;
+  // Live transcription
+  startTranscription: (opts: { language?: string; model?: string }) => Promise<boolean>;
+  sendAudio: (buf: ArrayBuffer) => void;
+  stopTranscription: () => Promise<boolean>;
+  onTranscription: (cb: (e: unknown) => void) => () => void;
 }
 
 declare global {

@@ -1,7 +1,7 @@
-import React, { useRef,useState, useCallback, useEffect } from 'react';
+import React, { useRef, useState, useCallback, useEffect, useLayoutEffect } from 'react';
 import { useAssistantStore } from '../store/assistantStore';
 import { openAIProvider } from '../services/ai/OpenAIProvider';
-
+import { useSpeakerTranscription } from '../hooks/useSpeakerTranscription';
 const DEFAULT_SCREENSHOT_PROMPT = 'Analyze and answer the questions in this screenshot';
 
 export const AskInput: React.FC = () => {
@@ -21,164 +21,26 @@ export const AskInput: React.FC = () => {
   const addMessage = useAssistantStore((s) => s.addMessage);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const [isListening, setIsListening] = useState(false);
-  const [interimTranscript, setInterimTranscript] = useState('');
-  const recognitionRef = useRef<any>(null);
-  const mediaStreamRef = useRef<MediaStream | null>(null);
-  const isListeningRef = useRef(false);
-  const initialInputRef = useRef('');
-
-  // Pure SpeechRecognition flow: Listen → SpeechRecognition → interim transcript → textarea
-  // No audio recording, no Whisper. User presses Enter to submit.
-  const toggleListening = useCallback(async () => {
-    // If currently listening, stop
-    if (isListening) {
-      isListeningRef.current = false;
-      setIsListening(false);
-      setInterimTranscript('');
-
-      // Stop Web Speech Recognition
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.onend = null;
-          recognitionRef.current.stop();
-        } catch {}
-        recognitionRef.current = null;
-      }
-
-      // Release the mic stream
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-        mediaStreamRef.current = null;
-      }
-
-      addToast({ message: 'Stopped listening.', type: 'info' });
-      return;
-    }
-
-    // Save initial input before listening so spoken words append cleanly
-    initialInputRef.current = useAssistantStore.getState().input;
-
-    // In Electron, we must acquire the mic stream and keep it alive
-    // for SpeechRecognition to work — it shares the audio device
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      mediaStreamRef.current = stream;
-    } catch (e: any) {
-      console.warn('Microphone permission check failed:', e);
-      addToast({ message: 'Microphone access denied or no recording device found.', type: 'error' });
-      return;
-    }
-
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
-
-    if (!SpeechRecognition) {
-      stream.getTracks().forEach((track) => track.stop());
-      mediaStreamRef.current = null;
-      addToast({ message: 'Speech recognition API not available in browser.', type: 'error' });
-      return;
-    }
-
-    try {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-
-      isListeningRef.current = true;
-      setIsListening(true);
-      addToast({ message: 'Listening live... Speak now!', type: 'success' });
-
-      recognition.onresult = (event: any) => {
-        let final = '';
-        let interim = '';
-        for (let i = 0; i < event.results.length; i++) {
-          const transcriptChunk = event.results[i][0].transcript;
-          if (event.results[i].isFinal) {
-            final += transcriptChunk + ' ';
-          } else {
-            interim += transcriptChunk;
-          }
-        }
-
-        // Clean up repetitive silence dots (. . . . .)
-        let cleanSpokenText = (final + interim)
-          .replace(/(\s*\.\s*){2,}/g, ' ')
-          .replace(/^\s*\.\s*/, '')
-          .trim();
-
-        if (cleanSpokenText) {
-          const prefix = initialInputRef.current ? `${initialInputRef.current.trim()} ` : '';
-          setInput(prefix + cleanSpokenText);
-        }
-        setInterimTranscript(interim.replace(/(\s*\.\s*){2,}/g, '').trim());
-      };
-
-      recognition.onerror = (event: any) => {
-        console.warn('Live speech recognition notice:', event.error);
-        if (event.error === 'not-allowed') {
-          setIsListening(false);
-          isListeningRef.current = false;
-          if (mediaStreamRef.current) {
-            mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-            mediaStreamRef.current = null;
-          }
-          addToast({ message: 'Microphone permission denied.', type: 'error' });
-        }
-      };
-
-      recognition.onend = () => {
-        setInterimTranscript('');
-        // Keep listening continuous in real-time until user turns it off
-        if (isListeningRef.current && recognitionRef.current) {
-          try {
-            recognition.start();
-          } catch {
-            // ignore restart errors
-          }
-        } else {
-          setIsListening(false);
-          // Release mic when recognition ends naturally
-          if (mediaStreamRef.current) {
-            mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-            mediaStreamRef.current = null;
-          }
-        }
-      };
-
-      recognition.start();
-      recognitionRef.current = recognition;
-    } catch (err) {
-      console.error('Failed to start live speech recognition:', err);
-      setIsListening(false);
-      isListeningRef.current = false;
-      // Release mic on failure
-      if (mediaStreamRef.current) {
-        mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-        mediaStreamRef.current = null;
-      }
-      addToast({ message: 'Failed to start live speech recognition.', type: 'error' });
-    }
-  }, [isListening, addToast, setInput]);
-
-  // Cleanup recognition and mic stream on component unmount
-  useEffect(() => {
-    return () => {
-      isListeningRef.current = false;
-      if (recognitionRef.current) {
-        try {
-          recognitionRef.current.onend = null;
-          recognitionRef.current.stop();
-        } catch {}
-      }
-      if (mediaStreamRef.current) {
-        try {
-          mediaStreamRef.current.getTracks().forEach((track) => track.stop());
-        } catch {}
-      }
-    };
+  // Auto-resize textarea to fit content (up to max-height)
+  const autoResize = useCallback(() => {
+    const el = textareaRef.current;
+    if (!el) return;
+    el.style.height = 'auto'; // reset so scrollHeight is recalculated
+    el.style.height = `${Math.min(el.scrollHeight, 100)}px`;
   }, []);
+
+  useLayoutEffect(() => {
+    autoResize();
+  }, [input, autoResize]);
+  const { status, partial, error, start, stop } = useSpeakerTranscription({
+    language: 'en', // 'ur' or 'hi' if your meetings are in those languages
+    onFinal: (text) => {
+      const { input, setInput } = useAssistantStore.getState();
+      setInput(input ? `${input.trimEnd()} ${text}` : text);
+    },
+  });
+  const listening = status === 'connecting' || status === 'listening' || status === 'reconnecting';
+
 
   // Auto-fill prompt when a screenshot is captured
   const prevScreenshotRef = useRef(screenshotDataUrl);
@@ -317,14 +179,23 @@ export const AskInput: React.FC = () => {
         </div>
       )}
 
-      {/* Live speech listening indicator */}
-      {isListening && (
-        <div className="mb-2 flex items-center gap-2 px-3 py-1.5 rounded-xl bg-red-500/10 border border-red-500/30 animate-pulse">
-          <div className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
-          <span className="text-[10px] text-red-400 font-semibold tracking-wide uppercase">Listening Live</span>
-          <span className="text-[10px] text-nexa-text-muted truncate flex-1 italic">
-            {interimTranscript || 'Waiting for speaker in meeting...'}
-          </span>
+      {listening && (
+        <div className="mb-1.5 rounded-lg border border-red-500/20 bg-red-500/5 px-2.5 py-1.5">
+          <div className="flex items-center gap-2 text-[10px] font-medium text-red-400">
+            <span className="relative flex h-1.5 w-1.5">
+              <span className="absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75 animate-ping" />
+              <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-red-500" />
+            </span>
+            {status === 'listening' ? 'Listening to speaker' : status === 'connecting' ? 'Connecting…' : 'Reconnecting…'}
+          </div>
+          {partial && (
+            <p dir="auto" className="mt-1 text-[11px] leading-4 italic text-nexa-text-muted">{partial}</p>
+          )}
+        </div>
+      )}
+      {error && (
+        <div className="mb-1.5 rounded-lg border border-amber-500/20 bg-amber-500/5 px-2.5 py-1.5 text-[10px] text-amber-400">
+          {error}
         </div>
       )}
 
@@ -343,34 +214,42 @@ export const AskInput: React.FC = () => {
         </div>
       )}
 
+
       {/* Input area */}
-      <div className="relative flex items-end gap-1.5">
-        <div className="flex-1 relative">
+      <div className="flex items-end gap-1.5">
+        {/* Textarea */}
+        <div className="relative flex-1 min-w-0">
           <textarea
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
+            dir='auto'
             placeholder={
-              isListening
-                ? "Live transcribing speaker in meeting..."
+              listening
+                ? 'Listening — speak now...'
                 : hasScreenshot
-                ? "Ask about this screenshot..."
-                : "Ask anything or listen to meeting..."
+                  ? 'Ask about this screenshot...'
+                  : 'Ask anything or listen to meeting...'
             }
             rows={1}
-            className="no-drag w-full bg-nexa-card/80 text-nexa-text text-xs rounded-xl px-3.5 py-2.5 pr-10
-                       border border-nexa-border focus:border-nexa-accent/40 focus:outline-none focus:ring-1 focus:ring-nexa-accent/20
-                       placeholder:text-nexa-text-dim resize-none transition-all duration-200 min-h-[36px] max-h-[100px]"
-            style={{ overflow: input.includes('\n') ? 'auto' : 'hidden' }}
             disabled={isLoading}
+            className={`nexa-textarea no-drag block w-full bg-nexa-card/80 text-nexa-text text-xs leading-5 rounded-xl
+              px-3.5 py-[9px] pr-8 border focus:outline-none focus:ring-1 resize-none
+              transition-colors duration-200 min-h-[40px] max-h-[100px] placeholder:text-nexa-text-dim
+              ${listening
+                ? 'border-red-500/40 focus:border-red-500/60 focus:ring-red-500/20'
+                : 'border-nexa-border focus:border-nexa-accent/40 focus:ring-nexa-accent/20'}`}
+            style={{ overflowY: 'auto', overflowX: 'hidden' }}
           />
           {input && (
             <button
               onClick={() => setInput('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-nexa-text-dim hover:text-nexa-text transition-colors"
+              title="Clear"
+              className="no-drag absolute right-2 top-[12px] flex items-center justify-center w-4 h-4 rounded-full
+                   text-nexa-text-dim hover:text-nexa-text hover:bg-white/10 transition-colors"
             >
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
                 <line x1="18" y1="6" x2="6" y2="18" />
                 <line x1="6" y1="6" x2="18" y2="18" />
               </svg>
@@ -378,44 +257,41 @@ export const AskInput: React.FC = () => {
           )}
         </div>
 
-        {/* Live Meeting Mic button */}
+        {/* Listen to speaker */}
         <button
-          onClick={toggleListening}
-          disabled={isLoading}
-          className={`tooltip-container no-drag flex items-center gap-1 px-2.5 py-2 rounded-xl text-[11px] font-medium transition-all duration-200 flex-shrink-0 border ${
-            isListening
-              ? 'bg-red-500/20 text-red-400 border-red-500/40 shadow-glow'
-              : 'bg-nexa-card/80 text-nexa-text-muted border-nexa-border hover:text-nexa-text hover:bg-nexa-card hover:border-nexa-border-light'
-          }`}
+          onClick={listening ? stop : start}
+          className={`tooltip-container no-drag relative flex items-center justify-center w-10 h-10 rounded-xl border
+                transition-all duration-200 flex-shrink-0
+                ${listening
+              ? 'bg-red-500/15 border-red-500/40 text-red-400 hover:bg-red-500/25'
+              : 'bg-nexa-card/80 border-nexa-border text-nexa-text-muted hover:text-nexa-text hover:bg-nexa-card hover:border-nexa-border-light'}`}
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={isListening ? 'animate-bounce' : ''}>
-            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z" />
-            <path d="M19 10v2a7 7 0 0 1-14 0v-2" />
-            <line x1="12" y1="19" x2="12" y2="23" />
-            <line x1="8" y1="23" x2="16" y2="23" />
-          </svg>
-          <span className="hidden sm:inline">
-            {isListening ? 'Listening' : 'Listen'}
-          </span>
-          <span className="tooltip">
-            {isListening ? 'Click to Stop Listening' : 'Listen & Transcribe Live'}
-          </span>
+          {listening ? (
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="5" y="5" width="14" height="14" rx="2" />
+            </svg>
+          ) : (
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 18v-6a9 9 0 0 1 18 0v6" />
+              <path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z" />
+            </svg>
+          )}
+          <span className="tooltip">{listening ? 'Stop listening' : 'Listen to speaker'}</span>
         </button>
 
-        {/* Capture screen */}
+        {/* Capture */}
         <button
           onClick={handleCaptureScreen}
           disabled={isLoading}
-          className="tooltip-container no-drag flex items-center gap-1.5 px-2.5 py-2 rounded-xl text-[11px] font-medium
-                     bg-nexa-card/80 text-nexa-text-muted border border-nexa-border
-                     hover:text-nexa-text hover:bg-nexa-card hover:border-nexa-border-light
-                     transition-all duration-200 disabled:opacity-50 flex-shrink-0"
+          className="tooltip-container no-drag flex items-center justify-center w-10 h-10 rounded-xl border
+               bg-nexa-card/80 text-nexa-text-muted border-nexa-border
+               hover:text-nexa-text hover:bg-nexa-card hover:border-nexa-border-light
+               transition-all duration-200 disabled:opacity-50 flex-shrink-0"
         >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
             <circle cx="12" cy="13" r="4" />
           </svg>
-          <span className="hidden sm:inline">Capture</span>
           <span className="tooltip">Capture Screen (Ctrl+Shift+H)</span>
         </button>
 
@@ -424,9 +300,9 @@ export const AskInput: React.FC = () => {
           onClick={handleSubmit}
           disabled={isLoading || (!input.trim() && !ocrText && !screenshotDataUrl)}
           className="no-drag flex items-center justify-center w-9 h-9 rounded-xl font-medium
-                     bg-gradient-to-r from-blue-500 to-blue-600 text-white
-                     hover:from-blue-600 hover:to-blue-700 shadow-glow hover:shadow-glow-lg
-                     transition-all duration-200 disabled:opacity-40 disabled:shadow-none flex-shrink-0"
+               bg-gradient-to-r from-blue-500 to-blue-600 text-white
+               hover:from-blue-600 hover:to-blue-700 shadow-glow hover:shadow-glow-lg
+               transition-all duration-200 disabled:opacity-40 disabled:shadow-none flex-shrink-0"
         >
           {isLoading ? (
             <svg width="14" height="14" viewBox="0 0 24 24" className="animate-spin" fill="none" stroke="currentColor" strokeWidth="2.5">

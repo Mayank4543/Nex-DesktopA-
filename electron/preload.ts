@@ -4,7 +4,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // AI
   askAI: (request: { prompt: string; context?: string; action?: string; imageDataUrl?: string }) =>
     ipcRenderer.invoke('ask-ai', request),
-
+  // Live transcription
+  startTranscription: (opts: { language?: string; model?: string }) =>
+    ipcRenderer.invoke('transcribe:start', opts),
+  sendAudio: (buf: ArrayBuffer) => ipcRenderer.send('transcribe:audio', buf),
+  stopTranscription: () => ipcRenderer.invoke('transcribe:stop'),
+  onTranscription: (cb: (e: unknown) => void) => {
+    const handler = (_event: unknown, e: unknown) => cb(e);
+    ipcRenderer.on('transcribe:event', handler);
+    return () => ipcRenderer.removeListener('transcribe:event', handler);
+  },
   // Screenshot
   captureScreen: () => ipcRenderer.invoke('capture-screen'),
 

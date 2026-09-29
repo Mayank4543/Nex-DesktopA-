@@ -110,4 +110,5 @@ export function registerAIHandlers(): void {
       return { content: '', error: `AI request failed: ${err.message || 'Unknown error'}` };
     }
   });
+ 
 }

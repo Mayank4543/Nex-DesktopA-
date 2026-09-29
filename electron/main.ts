@@ -1,10 +1,10 @@
-import { app, BrowserWindow, ipcMain, session } from 'electron';
+import { app, BrowserWindow, desktopCapturer, ipcMain, session } from 'electron';
 import * as path from 'path';
 import { registerScreenshotHandlers } from './ipc/screenshot';
 import { registerShortcuts, unregisterShortcuts } from './ipc/shortcuts';
 import { registerSettingsHandlers, loadSettings } from './ipc/settings';
 import { registerAIHandlers } from './ipc/ai';
-
+import { registerTranscriptionHandlers, closeTranscription } from './ipc/transcription';
 // Handle Squirrel events for Windows installer
 try {
   if (require('electron-squirrel-startup')) app.quit();
@@ -20,7 +20,7 @@ function createWindow(): void {
   const settings = loadSettings();
 
   mainWindow = new BrowserWindow({
-    width: 620,
+    width: 900,
     height: 520,
     minWidth: 400,
     minHeight: 300,
@@ -121,6 +121,7 @@ function createWindow(): void {
   });
 
   mainWindow.on('closed', () => {
+    closeTranscription();
     mainWindow = null;
   });
 }
@@ -128,15 +129,32 @@ function createWindow(): void {
 // Security & Permissions setup
 app.on('ready', () => {
   // Allow microphone/media/speech permissions in Electron
+
+  session.defaultSession.setDisplayMediaRequestHandler(
+    async (_request, callback) => {
+      try {
+        const sources = await desktopCapturer.getSources({ types: ['screen'] });
+        if (!sources.length) {
+          console.error('[DisplayMedia] No screen sources found');
+          callback({ video: null as any }); // deny — renderer fallback will use mic
+          return;
+        }
+        callback({ video: sources[0], audio: 'loopback' }); // system audio
+      } catch (err) {
+        console.error('[DisplayMedia] Handler error:', err);
+        callback({ video: null as any }); // deny — renderer fallback will use mic
+      }
+    },
+  );
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
-    const allowedPermissions = ['media', 'audioCapture', 'microphone'];
-    callback(allowedPermissions.includes(permission) || true);
+    const allowedPermissions = ['media', 'audioCapture', 'microphone', 'display-capture'];
+    callback(allowedPermissions.includes(permission));
   });
 
   // Also handle permission checks (not just requests)
   session.defaultSession.setPermissionCheckHandler((_webContents, permission) => {
-    const allowedPermissions = ['media', 'audioCapture', 'microphone'];
-    return allowedPermissions.includes(permission) || true;
+    const allowedPermissions = ['media', 'audioCapture', 'microphone', 'display-capture'];
+    return allowedPermissions.includes(permission);
   });
 
   session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
@@ -144,7 +162,7 @@ app.on('ready', () => {
       responseHeaders: {
         ...details.responseHeaders,
         'Content-Security-Policy': [
-          "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https://api.openai.com https://*.google.com wss://*.google.com",
+          "default-src 'self'; script-src 'self' 'unsafe-inline' blob:; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src 'self' https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' blob: mediastream:; connect-src 'self' https://api.openai.com https://*.google.com wss://*.google.com",
         ],
       },
     });
@@ -156,6 +174,7 @@ app.whenReady().then(() => {
   registerScreenshotHandlers();
   registerSettingsHandlers();
   registerAIHandlers();
+  registerTranscriptionHandlers();
 
   createWindow();
 
@@ -174,5 +193,6 @@ app.on('window-all-closed', () => {
 });
 
 app.on('will-quit', () => {
+  closeTranscription();
   unregisterShortcuts();
 });

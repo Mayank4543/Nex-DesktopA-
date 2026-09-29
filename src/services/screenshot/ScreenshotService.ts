@@ -1,9 +1,4 @@
 import type { ScreenshotData } from '../../types/assistant';
-
-/**
- * Screenshot service — captures the screen via Electron IPC.
- * The actual capture happens in the main process for security.
- */
 export class ScreenshotService {
   async captureFullScreen(): Promise<ScreenshotData | null> {
     if (!window.electronAPI) {
@@ -20,9 +15,6 @@ export class ScreenshotService {
     }
   }
 
-  /**
-   * Crop a region from a full screenshot.
-   */
   cropRegion(
     screenshotDataUrl: string,
     region: { x: number; y: number; width: number; height: number },

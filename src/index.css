@@ -40,6 +40,27 @@ html, body, #root {
   background: rgba(255, 255, 255, 0.2);
 }
 
+/* ─── Textarea Scrollbar (polished thin) ─────────────────────── */
+
+.nexa-textarea::-webkit-scrollbar {
+  width: 3px;
+}
+
+.nexa-textarea::-webkit-scrollbar-track {
+  background: transparent;
+  margin: 6px 0;
+}
+
+.nexa-textarea::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  transition: background 0.2s;
+}
+
+.nexa-textarea::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.18);
+}
+
 /* ─── Drag Region ────────────────────────────────────────────── */
 
 .drag-region {
